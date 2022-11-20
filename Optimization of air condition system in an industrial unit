@@ -1,0 +1,122 @@
+#include <stdbool.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+#include <omp.h>
+
+#define N 5
+#define NUM_THREADS    5
+char MatrizHC[N][N] =   {{ 'C', 'C', 'H', 'C', 'H' },
+                     { 'C', 'C', 'H', 'H', 'C' },
+                     { 'C', 'C', 'H', 'C', 'C' },
+                     { 'C', 'H', 'H', 'C', 'C' },
+                     { 'H', 'C', 'H', 'C', 'C' }};
+
+float MatrizNum[N][N] = {{ 0, 0, 0, 0, 0 },
+                         { 0, 0, 0, 0, 0 },
+                         { 0, 0, 0, 0, 0 },
+                         { 0, 0, 0, 0, 0 },
+                         { 0, 0, 0, 0, 0 }};
+
+
+pthread_mutex_t lock;
+
+
+void *LlenadoMa(void *threadid){
+    long tid;
+    tid = (long)threadid;
+    int col = 0;
+    int fil = 0;
+    while (MatrizNum[col][fil] < 99) {
+
+        if (MatrizHC[col][fil] == 'C'){
+            MatrizNum[col][fil] = (rand()%6000)/100.0f;
+        }
+
+        else if (MatrizHC[col][fil] == 'H'){
+            MatrizNum[col][fil] = ((rand()%4000)+6000)/100.0f;
+        }
+
+        col = (rand()%5);
+        fil = (rand()%5);
+    }
+    pthread_exit(NULL);
+    };
+
+int main(int argc, char** argv){
+
+    pthread_t threads[NUM_THREADS];
+    srand(time(NULL));
+    int i,j,k,col,fil;
+    int thread_num= 1;
+
+
+    if (argc > 1){
+        thread_num = atoi(argv[1]);
+    }
+    printf("La matriz original con C y H con un tamano de 5x5: \n");
+    for (i=0;i<N;i++){
+        for(j=0;j<N;j++){
+            printf(" %c ", MatrizHC[i][j]);
+
+        }
+        printf("\n");
+    }
+    int rc;
+    long t;
+    omp_set_num_threads(thread_num);
+    printf("OMP DEFINED, THREADCT = %d\n",thread_num);
+
+    for(t=0;t<NUM_THREADS;t++){
+        printf("In main: creating thread %ld\n", t);
+        rc = pthread_create(&threads[t], NULL, LlenadoMa, (void *)t);
+        if (rc){
+            printf("ERROR; return code from pthread_create() is %d\n", rc);
+            exit(-1);
+        }
+    }
+
+    printf("La matriz con datos de temperatura: \n");
+    for (i=0;i<N;i++){
+        for(j=0;j<N;j++){
+            if (MatrizNum[i][j]<10){
+                printf(" %2.2f ", MatrizNum[i][j]);
+            }
+            else{
+                printf(" %2.2f ", MatrizNum[i][j]);
+            }
+        }
+         printf("\n");
+    }
+    int max_time = 100;
+    int alpha = 3;
+    int del_x = 2;
+    float del_t = (pow(del_x, 2))/(4 * alpha);
+    float gamma = (alpha * del_t) / (del_x*del_x);
+    int u[max_time][N][N];
+    #pragma omp parallel for private(k, i, j) shared (u, MatrizNum)
+    for(int k = 0; k < max_time; k++){
+        for(int i = 0; i < N; i++){
+            for(int j = 0; j < N; j++){
+                u[k][i][j] = MatrizNum[i][j];
+            }
+        }
+    }
+
+    #pragma omp parallel for private(k, i, j) shared (u)
+    for(int k = 0; k < max_time - 1; k++){
+        for(int i = 1; i < N - 1; i+= del_x){
+            for(int j = 1; j < N - 1; j+= del_x){
+                u[k + 1][i][j] = gamma * (u[k][i+1][j] + u[k][i-1][j] + u[k][i][j+1] + u[k][i][j-1] - 4*u[k][i][j]) + u[k][i][j];
+            }
+        }
+    }
+   printf("Ecuacion de calor: \n");
+   printf("y = %d * (%f / (%d)^2)\n", alpha, del_t, del_x);
+
+  return 0;
+
+    pthread_exit(NULL);
+}
